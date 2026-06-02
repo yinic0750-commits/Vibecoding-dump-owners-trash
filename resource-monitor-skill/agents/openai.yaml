@@ -1,0 +1,3 @@
+display_name: Resource Monitor
+short_description: Low-overhead terminal CPU, GPU, and memory monitor for local agent sessions.
+default_prompt: Monitor local CPU, GPU, and memory usage during a long-running coding, testing, or benchmarking task without streaming samples into chat.
