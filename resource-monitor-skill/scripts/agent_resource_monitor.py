@@ -14,14 +14,22 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional, Tuple
 
 
 BAR_WIDTH = 28
+HUD_BAR_WIDTH = 16
 ANSI_HOME = "\033[H"
 ANSI_CLEAR = "\033[2J"
 ANSI_HIDE_CURSOR = "\033[?25l"
 ANSI_SHOW_CURSOR = "\033[?25h"
+ANSI_RESET = "\033[0m"
+ANSI_DIM = "\033[2m"
+ANSI_BOLD = "\033[1m"
+ANSI_GREEN = "\033[38;5;154m"
+ANSI_YELLOW = "\033[38;5;226m"
+ANSI_GRAY = "\033[38;5;245m"
 
 
 @dataclass
@@ -236,6 +244,24 @@ def bar(value: Optional[float], width: int = BAR_WIDTH) -> str:
     return "[" + ("#" * filled) + ("-" * (width - filled)) + f"] {value:5.1f}%"
 
 
+def hud_bar(value: Optional[float], width: int, color: bool, ascii_only: bool) -> str:
+    if value is None:
+        empty = "-" if ascii_only else "░"
+        return empty * width
+    filled_count = int(round(width * clamp(value) / 100.0))
+    full = "#" if ascii_only else "█"
+    empty = "-" if ascii_only else "░"
+    filled = full * filled_count
+    rest = empty * (width - filled_count)
+    if color:
+        return f"{ANSI_GREEN}{filled}{ANSI_DIM}{rest}{ANSI_RESET}"
+    return filled + rest
+
+
+def pct(value: Optional[float]) -> str:
+    return "n/a" if value is None else f"{value:.0f}%"
+
+
 def format_gib(value: Optional[float]) -> str:
     return "n/a" if value is None else f"{value:5.1f} GiB"
 
@@ -244,7 +270,20 @@ def format_mib(value: Optional[float]) -> str:
     return "n/a" if value is None else f"{value:7.0f} MiB"
 
 
-def render(metrics: Metrics, interval: float, plain: bool) -> str:
+def colorize(text: str, code: str, enabled: bool) -> str:
+    if not enabled:
+        return text
+    return f"{code}{text}{ANSI_RESET}"
+
+
+def compact_label(label: str, max_len: int = 22) -> str:
+    clean = " ".join(label.strip().split()) or "agent-monitor"
+    if len(clean) <= max_len:
+        return clean
+    return clean[: max_len - 1] + "~"
+
+
+def render_panel(metrics: Metrics, interval: float, plain: bool) -> str:
     lines = [
         "Agent Resource Monitor",
         f"Refresh: {interval:g}s  Time: {time.strftime('%Y-%m-%d %H:%M:%S')}",
@@ -262,11 +301,70 @@ def render(metrics: Metrics, interval: float, plain: bool) -> str:
     return ANSI_HOME + output + "\n"
 
 
+def render_statusline(
+    metrics: Metrics,
+    interval: float,
+    plain: bool,
+    label: str,
+    color: bool,
+    ascii_only: bool,
+) -> str:
+    color = color and not plain
+    arrow = ">" if ascii_only else "›"
+    live = ">>" if ascii_only else "▶▶"
+    dot = "|" if ascii_only else "·"
+    label_text = colorize(compact_label(label), ANSI_DIM + ANSI_BOLD, color)
+    cpu_name = colorize("cpu", ANSI_GRAY, color)
+    mem_name = colorize("mem", ANSI_GRAY, color)
+    gpu_name = colorize("gpu", ANSI_GRAY, color)
+    cpu_pct = colorize(pct(metrics.cpu_percent), ANSI_GREEN + ANSI_BOLD, color)
+    mem_pct = colorize(pct(metrics.mem_percent), ANSI_GREEN + ANSI_BOLD, color)
+    gpu_pct = colorize(pct(metrics.gpu_percent), ANSI_GREEN + ANSI_BOLD, color)
+    live_text = colorize(live + " monitor mode on", ANSI_YELLOW + ANSI_BOLD, color)
+
+    lines = [
+        (
+            f"{colorize(arrow, ANSI_GRAY + ANSI_BOLD, color)} {label_text} | "
+            f"{cpu_name} {hud_bar(metrics.cpu_percent, HUD_BAR_WIDTH, color, ascii_only)} {cpu_pct} | "
+            f"{mem_name} {hud_bar(metrics.mem_percent, HUD_BAR_WIDTH, color, ascii_only)} {mem_pct} | "
+            f"{gpu_name} {hud_bar(metrics.gpu_percent, HUD_BAR_WIDTH, color, ascii_only)} {gpu_pct}"
+        ),
+        (
+            f"{live_text} "
+            f"{colorize(f'({interval:g}s refresh)', ANSI_GRAY, color)} "
+            f"{dot} mem {format_gib(metrics.mem_used_gib).strip()}/{format_gib(metrics.mem_total_gib).strip()} "
+            f"{dot} Ctrl-C to stop"
+        ),
+    ]
+    output = "\n".join(lines)
+    if plain:
+        return output + "\n"
+    return ANSI_HOME + output + "\n"
+
+
+def render(
+    metrics: Metrics,
+    interval: float,
+    plain: bool,
+    style: str,
+    label: str,
+    color: bool,
+    ascii_only: bool,
+) -> str:
+    if style == "panel":
+        return render_panel(metrics, interval, plain)
+    return render_statusline(metrics, interval, plain, label, color, ascii_only)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Low-overhead terminal resource monitor for CLI agents.")
     parser.add_argument("--interval", type=float, default=5.0, help="Refresh interval in seconds. Default: 5.")
     parser.add_argument("--once", action="store_true", help="Print one sample and exit.")
     parser.add_argument("--plain", action="store_true", help="Do not use ANSI screen refresh codes.")
+    parser.add_argument("--style", choices=("statusline", "panel"), default="statusline", help="Output style. Default: statusline.")
+    parser.add_argument("--label", default=Path.cwd().name or "agent-monitor", help="Short label shown in statusline mode.")
+    parser.add_argument("--no-color", action="store_true", help="Disable ANSI colors.")
+    parser.add_argument("--ascii", action="store_true", help="Use ASCII-only progress bars and symbols.")
     parser.add_argument(
         "--apple-gpu",
         action="store_true",
@@ -293,7 +391,17 @@ def main() -> int:
     try:
         while True:
             metrics = monitor.sample()
-            sys.stdout.write(render(metrics, monitor.interval, args.plain or args.once))
+            sys.stdout.write(
+                render(
+                    metrics,
+                    monitor.interval,
+                    args.plain or args.once,
+                    args.style,
+                    args.label,
+                    not args.no_color,
+                    args.ascii,
+                )
+            )
             sys.stdout.flush()
             if args.once or stop_event.wait(monitor.interval):
                 break

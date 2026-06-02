@@ -5,7 +5,7 @@ Purpose: low-overhead terminal monitoring for local CPU, GPU, and memory during 
 Command:
 
 ```bash
-scripts/monitor.sh --interval 5
+scripts/monitor.sh --interval 5 --style statusline
 ```
 
 Behavior:

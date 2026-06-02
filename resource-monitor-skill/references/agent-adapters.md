@@ -19,7 +19,7 @@ Use either a Claude Code skill location if available in the user's setup, or add
 ```markdown
 When the user asks to monitor local CPU/GPU/memory during coding, testing, benchmarking, or model pressure tests, run:
 
-resource-monitor-skill/scripts/monitor.sh --interval 5
+resource-monitor-skill/scripts/monitor.sh --interval 5 --style statusline
 
 Do not paste every sample into chat. Use a separate terminal pane when possible. Stop with Ctrl-C or pkill -f agent_resource_monitor.py.
 ```
@@ -31,7 +31,7 @@ For agents that read `AGENTS.md`, add:
 ```markdown
 ### Resource Monitor
 
-On request, start `resource-monitor-skill/scripts/monitor.sh --interval 5`.
+On request, start `resource-monitor-skill/scripts/monitor.sh --interval 5 --style statusline`.
 Do not stream samples into the conversation. Prefer a separate terminal pane. Stop it when the session ends or the user asks.
 ```
 
@@ -40,7 +40,7 @@ Do not stream samples into the conversation. Prefer a separate terminal pane. St
 If no skill system exists, expose this as a tool command:
 
 ```bash
-/absolute/path/to/resource-monitor-skill/scripts/monitor.sh --interval 5
+/absolute/path/to/resource-monitor-skill/scripts/monitor.sh --interval 5 --style statusline
 ```
 
 The agent only needs to remember the command and the no-chat-streaming rule.

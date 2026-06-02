@@ -3,7 +3,7 @@
 When the user asks to monitor local CPU, GPU, or memory during coding, testing, benchmarking, model pressure tests, or long-running Claude Code work, run:
 
 ```bash
-scripts/monitor.sh --interval 5
+scripts/monitor.sh --interval 5 --style statusline
 ```
 
 Rules:

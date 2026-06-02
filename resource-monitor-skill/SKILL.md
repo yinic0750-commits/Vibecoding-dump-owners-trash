@@ -16,13 +16,13 @@ Do not stream resource samples into chat. Start the bundled terminal monitor as 
 From this skill directory:
 
 ```bash
-scripts/monitor.sh --interval 5
+scripts/monitor.sh --interval 5 --style statusline
 ```
 
 If the agent must continue working in the same shell, start it in the background and redirect logs:
 
 ```bash
-nohup scripts/monitor.sh --interval 5 --plain > /tmp/agent-resource-monitor.log 2>&1 &
+nohup scripts/monitor.sh --interval 5 --style statusline --plain > /tmp/agent-resource-monitor.log 2>&1 &
 ```
 
 For a separate terminal pane/window, run the foreground command above. Prefer a separate pane because it keeps the monitor visible without mixing with build/test output.
@@ -40,7 +40,8 @@ pkill -f agent_resource_monitor.py
 ## Behavior
 
 - Default refresh interval is 5 seconds.
-- Output is one compact terminal dashboard with progress bars.
+- Default output is a compact two-line agent-style statusline with CPU, memory, and GPU progress bars.
+- Use `--style panel` for the older multi-line dashboard.
 - CPU and memory use are collected with OS-native low-frequency probes.
 - NVIDIA GPU usage is read with `nvidia-smi` when available.
 - Apple GPU utilization is not sampled by default because reliable utilization usually needs `powermetrics`, which may require sudo and adds overhead. Use `--apple-gpu` only when the user explicitly accepts that tradeoff.
@@ -64,6 +65,7 @@ Run:
 ```bash
 scripts/monitor.sh --once
 scripts/monitor.sh --interval 5 --plain
+scripts/monitor.sh --interval 5 --style panel
 ```
 
 Confirm CPU and memory render, GPU either renders real data or `n/a`, and repeated refreshes do not flood the terminal.
